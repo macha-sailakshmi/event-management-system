@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Manager | Dashboard</title>
+    <style>
+        :root {
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            background-attachment: fixed;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .refresh-btn {
+            background: #ffffff;
+            color: #1a2a6c;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Event Participants</h1>
+
+    <button class="refresh-btn" onclick="fetchParticipants()">Refresh List</button>
+
+    <div class="container">
+        <div style="margin-bottom: 30px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px;">
+       <h3>Add New Participant</h3>
+       <input type="number" id="new-id" placeholder="ID (e.g. 10)" style="padding: 10px; border-radius: 5px; border: none;">
+       <input type="text" id="new-name" placeholder="Name" style="padding: 10px; border-radius: 5px; border: none;">
+       <button onclick="addParticipant()" style="padding: 10px 20px; border-radius: 5px; background: #28a745; color: white; border: none; cursor:
+     pointer;">Add</button>
+   </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="participant-table">
+                <!-- Data will appear here -->
+                <tr>
+                    <td colspan="3" style="text-align: center;">Loading participants...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchParticipants() {
+            try {
+                const response = await fetch('/api/db_participants');
+                const data = await response.json();
+                
+                const tableBody = document.getElementById('participant-table');
+                tableBody.innerHTML = ''; // Clear the loading message
+
+                data.forEach(participant => {
+                    const row = `
+                        <tr>
+                            <td>${participant.participant_id}</td>
+                            <td>${participant.participant_name}</td>
+                            <td>
+                                <button onclick="deleteParticipant(${participant.participant_id})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                    tableBody.innerHTML += row;
+                });
+            } catch (err) {
+                console.error('Error fetching participants:', err);
+            }
+        }
+
+        async function deleteParticipant(id) {
+            if (!confirm('Are you sure you want to delete this participant?')) return;
+
+            const response = await fetch(`/api/participants/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                fetchParticipants();
+            } else {
+                alert('Error deleting participant');
+            }
+        }
+
+        async function addParticipant() {
+         const id = document.getElementById('new-id').value;
+         const name = document.getElementById('new-name').value;
+    
+        const response = await fetch('/api/participants', {
+            method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ id, name })
+        });
+   
+       if (response.ok) {
+           alert('Participant added!');
+           fetchParticipants(); 
+       } else {
+           alert('Error adding participant');
+        }
+    }
+
+        
+        fetchParticipants();
+    </script>
+</body>
+</html>
