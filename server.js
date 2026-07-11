@@ -99,6 +99,70 @@ app.get('/api/registrations', async (req, res) => {
     }
 });
 
+app.get('/api/reports/most-attended', async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            select
+                e.event_id,
+                e.event_name,
+                count(ep.participant_id) as attendee_count
+            from events e
+            join event_participation ep on e.event_id = ep.event_id
+            join schedule s on e.event_id = s.event_id
+            where s.event_date >= current_date - interval 1 year
+            group by e.event_id, e.event_name
+            order by attendee_count desc
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/schedules', async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            select
+                s.schedule_id,
+                s.event_id,
+                e.event_name,
+                s.event_date,
+                s.start_time,
+                s.end_time
+            from schedule s
+            join events e on s.event_id = e.event_id
+            order by s.event_date, s.start_time
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/schedules', async (req, res) => {
+    const { eventId, eventDate, startTime, endTime } = req.body;
+
+    if (!eventId || !eventDate || !startTime || !endTime) {
+        return res.status(400).json({ error: "Please provide event, date, start time, and end time." });
+    }
+
+    try {
+        await db.query(
+            "INSERT INTO schedule (event_id, event_date, start_time, end_time) VALUES (?, ?, ?, ?)",
+            [eventId, eventDate, startTime, endTime]
+        );
+
+        res.status(201).json({
+            message: "Schedule added successfully. No time clash was detected."
+        });
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/registrations', async (req, res) => {
     const { eventId, participantId } = req.body;
 

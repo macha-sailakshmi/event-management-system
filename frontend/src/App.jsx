@@ -2,13 +2,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const emptyParticipant = { id: '', name: '' };
+const emptySchedule = {
+  eventId: '',
+  eventDate: '2024-03-20',
+  startTime: '11:00',
+  endTime: '13:00',
+};
 
 function App() {
   const [events, setEvents] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [reportRows, setReportRows] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [participantForm, setParticipantForm] = useState(emptyParticipant);
   const [registrationForm, setRegistrationForm] = useState({ eventId: '', participantId: '' });
+  const [scheduleForm, setScheduleForm] = useState(emptySchedule);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -26,25 +35,45 @@ function App() {
     setError('');
 
     try {
-      const [eventsResponse, participantsResponse, registrationsResponse] = await Promise.all([
+      const [
+        eventsResponse,
+        participantsResponse,
+        registrationsResponse,
+        reportResponse,
+        schedulesResponse,
+      ] = await Promise.all([
         fetch('/api/db_events'),
         fetch('/api/db_participants'),
         fetch('/api/registrations'),
+        fetch('/api/reports/most-attended'),
+        fetch('/api/schedules'),
       ]);
 
-      const [eventsData, participantsData, registrationsData] = await Promise.all([
+      const [
+        eventsData,
+        participantsData,
+        registrationsData,
+        reportData,
+        schedulesData,
+      ] = await Promise.all([
         eventsResponse.json(),
         participantsResponse.json(),
         registrationsResponse.json(),
+        reportResponse.json(),
+        schedulesResponse.json(),
       ]);
 
       if (!eventsResponse.ok) throw new Error(eventsData.error || 'Failed to fetch events');
       if (!participantsResponse.ok) throw new Error(participantsData.error || 'Failed to fetch participants');
       if (!registrationsResponse.ok) throw new Error(registrationsData.error || 'Failed to fetch registrations');
+      if (!reportResponse.ok) throw new Error(reportData.error || 'Failed to fetch report');
+      if (!schedulesResponse.ok) throw new Error(schedulesData.error || 'Failed to fetch schedules');
 
       setEvents(eventsData);
       setParticipants(participantsData);
       setRegistrations(registrationsData);
+      setReportRows(reportData);
+      setSchedules(schedulesData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -148,6 +177,32 @@ function App() {
     }
   };
 
+  const handleAddSchedule = async (event) => {
+    event.preventDefault();
+
+    if (!scheduleForm.eventId || !scheduleForm.eventDate || !scheduleForm.startTime || !scheduleForm.endTime) {
+      setError('Fill event, date, start time, and end time.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scheduleForm),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to add schedule');
+
+      showMessage(data.message || 'Schedule added successfully.');
+      setScheduleForm(emptySchedule);
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -203,6 +258,108 @@ function App() {
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="two-column">
+        <div className="panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">SQL Report</p>
+              <h2>Most Attended Events</h2>
+            </div>
+          </div>
+          <p className="query-note">
+            Uses JOIN + GROUP BY + COUNT to find the most attended events in the last year.
+          </p>
+          <div className="report-list">
+            {reportRows.length === 0 ? (
+              <p className="muted">No report rows found. Your schedule dates may be older than one year.</p>
+            ) : (
+              reportRows.map((row, index) => (
+                <article className="report-card" key={row.event_id}>
+                  <span>#{index + 1}</span>
+                  <div>
+                    <strong>{row.event_name}</strong>
+                    <small>Event ID: {row.event_id}</small>
+                  </div>
+                  <b>{row.attendee_count} attendees</b>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Trigger Demo</p>
+              <h2>Schedule Clash Check</h2>
+            </div>
+          </div>
+          <p className="query-note">
+            Try event 2 on 2024-03-20 from 11:00 to 13:00. MySQL trigger should reject it because it clashes with Tech Conference.
+          </p>
+          <form className="schedule-form" onSubmit={handleAddSchedule}>
+            <select
+              value={scheduleForm.eventId}
+              onChange={(event) => setScheduleForm({ ...scheduleForm, eventId: event.target.value })}
+            >
+              <option value="">Select Event</option>
+              {events.map((event) => (
+                <option key={event.event_id} value={event.event_id}>{event.event_name}</option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={scheduleForm.eventDate}
+              onChange={(event) => setScheduleForm({ ...scheduleForm, eventDate: event.target.value })}
+            />
+            <input
+              type="time"
+              value={scheduleForm.startTime}
+              onChange={(event) => setScheduleForm({ ...scheduleForm, startTime: event.target.value })}
+            />
+            <input
+              type="time"
+              value={scheduleForm.endTime}
+              onChange={(event) => setScheduleForm({ ...scheduleForm, endTime: event.target.value })}
+            />
+            <button type="submit">Add Schedule</button>
+          </form>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">Schedule Table</p>
+            <h2>Current Schedule Rows</h2>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Schedule ID</th>
+                <th>Event</th>
+                <th>Date</th>
+                <th>Start</th>
+                <th>End</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.map((schedule) => (
+                <tr key={schedule.schedule_id}>
+                  <td>{schedule.schedule_id}</td>
+                  <td>{schedule.event_name}</td>
+                  <td>{formatDate(schedule.event_date)}</td>
+                  <td>{formatTime(schedule.start_time)}</td>
+                  <td>{formatTime(schedule.end_time)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 

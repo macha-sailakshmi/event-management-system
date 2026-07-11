@@ -18,6 +18,8 @@ A full-stack DBMS web application to manage events, organizers, participants, sc
 - Register a participant for an event
 - Remove an event registration
 - Uses SQL joins to display event, organizer, participant, and registration data
+- Most attended events report using `JOIN`, `GROUP BY`, and `COUNT`
+- Schedule form that demonstrates the MySQL trigger for time clash prevention
 - Includes a database trigger to prevent schedule time clashes
 
 ## Database Tables
@@ -86,6 +88,37 @@ DELETE /api/participants/:id
 GET    /api/registrations
 POST   /api/registrations
 DELETE /api/registrations/:eventId/:participantId
+GET    /api/reports/most-attended
+GET    /api/schedules
+POST   /api/schedules
+```
+
+## DBMS Concepts Demonstrated
+
+- Primary keys and foreign keys
+- One-to-many relationship between organizers and events
+- Many-to-many relationship between events and participants
+- SQL joins across events, organizers, participants, schedules, and registrations
+- Aggregate report query using `COUNT` and `GROUP BY`
+- Trigger-based validation to prevent overlapping event schedules
+
+## Trigger Demo
+
+The database trigger `check_time_clashes` prevents two events from being scheduled at overlapping times on the same date.
+
+Use the dashboard schedule form to try:
+
+```text
+Event: Art Expo
+Date: 2024-03-20
+Start: 11:00
+End: 13:00
+```
+
+This overlaps with Tech Conference from 10:00 to 12:00, so MySQL should return:
+
+```text
+event time clash detected!
 ```
 
 ## Project Structure
