@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const emptyParticipant = { id: '', name: '' };
+const emptyEvent = { id: '', name: '', organizerId: '' };
 const emptySchedule = {
   eventId: '',
   eventDate: '2024-03-20',
@@ -11,10 +12,12 @@ const emptySchedule = {
 
 function App() {
   const [events, setEvents] = useState([]);
+  const [organizers, setOrganizers] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [reportRows, setReportRows] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [eventForm, setEventForm] = useState(emptyEvent);
   const [participantForm, setParticipantForm] = useState(emptyParticipant);
   const [registrationForm, setRegistrationForm] = useState({ eventId: '', participantId: '' });
   const [scheduleForm, setScheduleForm] = useState(emptySchedule);
@@ -37,12 +40,14 @@ function App() {
     try {
       const [
         eventsResponse,
+        organizersResponse,
         participantsResponse,
         registrationsResponse,
         reportResponse,
         schedulesResponse,
       ] = await Promise.all([
         fetch('/api/db_events'),
+        fetch('/api/organizers'),
         fetch('/api/db_participants'),
         fetch('/api/registrations'),
         fetch('/api/reports/most-attended'),
@@ -51,12 +56,14 @@ function App() {
 
       const [
         eventsData,
+        organizersData,
         participantsData,
         registrationsData,
         reportData,
         schedulesData,
       ] = await Promise.all([
         eventsResponse.json(),
+        organizersResponse.json(),
         participantsResponse.json(),
         registrationsResponse.json(),
         reportResponse.json(),
@@ -64,12 +71,14 @@ function App() {
       ]);
 
       if (!eventsResponse.ok) throw new Error(eventsData.error || 'Failed to fetch events');
+      if (!organizersResponse.ok) throw new Error(organizersData.error || 'Failed to fetch organizers');
       if (!participantsResponse.ok) throw new Error(participantsData.error || 'Failed to fetch participants');
       if (!registrationsResponse.ok) throw new Error(registrationsData.error || 'Failed to fetch registrations');
       if (!reportResponse.ok) throw new Error(reportData.error || 'Failed to fetch report');
       if (!schedulesResponse.ok) throw new Error(schedulesData.error || 'Failed to fetch schedules');
 
       setEvents(eventsData);
+      setOrganizers(organizersData);
       setParticipants(participantsData);
       setRegistrations(registrationsData);
       setReportRows(reportData);
@@ -88,6 +97,36 @@ function App() {
   const showMessage = (text) => {
     setMessage(text);
     window.setTimeout(() => setMessage(''), 2500);
+  };
+
+  const handleAddEvent = async (event) => {
+    event.preventDefault();
+
+    if (!eventForm.id || !eventForm.name.trim() || !eventForm.organizerId) {
+      setError('Enter event ID, event name, and organizer.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: eventForm.id,
+          name: eventForm.name.trim(),
+          organizerId: eventForm.organizerId,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to add event');
+
+      setEventForm(emptyEvent);
+      showMessage(data.message || 'Event added successfully.');
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleAddParticipant = async (event) => {
@@ -255,6 +294,7 @@ function App() {
                 <span>{formatDate(event.event_date)}</span>
                 <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
                 <strong>{event.participant_count} registered</strong>
+                <span>{event.schedule_count} schedule row{Number(event.schedule_count) === 1 ? '' : 's'}</span>
               </div>
             </article>
           ))}
@@ -270,11 +310,11 @@ function App() {
             </div>
           </div>
           <p className="query-note">
-            Uses JOIN + GROUP BY + COUNT to find the most attended events in the last year.
+            Uses JOIN + GROUP BY + COUNT to rank events by participant registrations.
           </p>
           <div className="report-list">
             {reportRows.length === 0 ? (
-              <p className="muted">No report rows found. Your schedule dates may be older than one year.</p>
+              <p className="muted">No report rows found. Register participants for events to generate this report.</p>
             ) : (
               reportRows.map((row, index) => (
                 <article className="report-card" key={row.event_id}>
@@ -298,7 +338,7 @@ function App() {
             </div>
           </div>
           <p className="query-note">
-            Try event 2 on 2024-03-20 from 11:00 to 13:00. MySQL trigger should reject it because it clashes with Tech Conference.
+            Add a schedule for any event. If the selected time overlaps with another event on the same date, the MySQL trigger rejects it.
           </p>
           <form className="schedule-form" onSubmit={handleAddSchedule}>
             <select
@@ -361,6 +401,41 @@ function App() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">Create Event</p>
+            <h2>Add New Event</h2>
+          </div>
+        </div>
+        <form className="form-grid" onSubmit={handleAddEvent}>
+          <input
+            type="number"
+            placeholder="Event ID"
+            value={eventForm.id}
+            onChange={(event) => setEventForm({ ...eventForm, id: event.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Event Name"
+            value={eventForm.name}
+            onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })}
+          />
+          <select
+            value={eventForm.organizerId}
+            onChange={(event) => setEventForm({ ...eventForm, organizerId: event.target.value })}
+          >
+            <option value="">Select Organizer</option>
+            {organizers.map((organizer) => (
+              <option key={organizer.organizer_id} value={organizer.organizer_id}>
+                {organizer.organizer_name}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Add Event</button>
+        </form>
       </section>
 
       <section className="two-column">
@@ -481,3 +556,4 @@ function formatTime(value) {
 }
 
 export default App;
+

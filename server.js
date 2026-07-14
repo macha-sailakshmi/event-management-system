@@ -46,15 +46,16 @@ app.get('/api/db_events',async(req,res)=>{
                 e.event_id,
                 e.event_name,
                 o.organizer_name,
-                s.event_date,
-                s.start_time,
-                s.end_time,
-                count(ep.participant_id) as participant_count
+                min(s.event_date) as event_date,
+                min(s.start_time) as start_time,
+                min(s.end_time) as end_time,
+                count(distinct s.schedule_id) as schedule_count,
+                count(distinct ep.participant_id) as participant_count
             from events e
             join organizers o on e.organizer_id=o.organizer_id
             left join schedule s on e.event_id = s.event_id
             left join event_participation ep on e.event_id = ep.event_id
-            group by e.event_id, e.event_name, o.organizer_name, s.event_date, s.start_time, s.end_time
+            group by e.event_id, e.event_name, o.organizer_name
             order by e.event_id
             `);
             res.json(rows);
@@ -65,6 +66,36 @@ app.get('/api/db_events',async(req,res)=>{
     }
     
 
+});
+
+app.get('/api/organizers', async (req, res) => {
+    try {
+        const [rows] = await db.query("SELECT * FROM organizers ORDER BY organizer_id");
+        res.json(rows);
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/events', async (req, res) => {
+    const { id, name, organizerId } = req.body;
+
+    if (!id || !name || !organizerId) {
+        return res.status(400).json({ error: "Please provide event ID, event name, and organizer." });
+    }
+
+    try {
+        await db.query(
+            "INSERT INTO events (event_id, event_name, organizer_id) VALUES (?, ?, ?)",
+            [id, name.trim(), organizerId]
+        );
+
+        res.status(201).json({ message: "Event added successfully!" });
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
     app.get('/api/db_participants', async (req, res) => {
@@ -108,8 +139,6 @@ app.get('/api/reports/most-attended', async (req, res) => {
                 count(ep.participant_id) as attendee_count
             from events e
             join event_participation ep on e.event_id = ep.event_id
-            join schedule s on e.event_id = s.event_id
-            where s.event_date >= current_date - interval 1 year
             group by e.event_id, e.event_name
             order by attendee_count desc
         `);
@@ -281,3 +310,4 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     
 });
+

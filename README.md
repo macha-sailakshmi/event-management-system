@@ -11,14 +11,14 @@ A full-stack DBMS web application to manage events, organizers, participants, sc
 
 ## Features
 
-- View scheduled events with organizer name, date, time, and participant count
+- View events with organizer name, schedule count, and participant count
 - View all participants from the MySQL database
-- Add a new participant from the React dashboard
+- Add new events and participants from the React dashboard
 - Delete participants
 - Register a participant for an event
 - Remove an event registration
 - Uses SQL joins to display event, organizer, participant, and registration data
-- Most attended events report using `JOIN`, `GROUP BY`, and `COUNT`
+- Most attended events report using `JOIN`, `GROUP BY`, and `COUNT` across all registrations
 - Schedule form that demonstrates the MySQL trigger for time clash prevention
 - Includes a database trigger to prevent schedule time clashes
 
@@ -81,6 +81,8 @@ http://localhost:5173
 
 ```text
 GET    /api/db_events
+GET    /api/organizers
+POST   /api/events
 GET    /api/db_participants
 POST   /api/participants
 PUT    /api/participants/:id
@@ -130,3 +132,4 @@ db/schema.sql          Database schema and sample data
 frontend/src/App.jsx   React dashboard logic
 frontend/src/App.css   Dashboard styling
 ```
+
