@@ -1,6 +1,6 @@
 # Event Management System
 
-A full-stack DBMS web application to manage events, organizers, participants, schedules, and event registrations.
+A web application to manage events, organizers, participants, schedules, and event registrations.
 
 ## Tech Stack
 
@@ -13,7 +13,7 @@ A full-stack DBMS web application to manage events, organizers, participants, sc
 
 - View events with organizer name, schedule count, and participant count
 - View all participants from the MySQL database
-- Add new events and participants from the React dashboard
+- Add new organizers, events, and participants from the dashboard
 - Delete participants
 - Register a participant for an event
 - Remove an event registration
@@ -82,6 +82,8 @@ http://localhost:5173
 ```text
 GET    /api/db_events
 GET    /api/organizers
+POST   /api/organizers
+DELETE /api/organizers/:id
 POST   /api/events
 GET    /api/db_participants
 POST   /api/participants
@@ -132,4 +134,5 @@ db/schema.sql          Database schema and sample data
 frontend/src/App.jsx   React dashboard logic
 frontend/src/App.css   Dashboard styling
 ```
+
 

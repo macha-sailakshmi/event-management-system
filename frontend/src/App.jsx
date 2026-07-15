@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const emptyParticipant = { id: '', name: '' };
+const emptyOrganizer = { id: '', name: '' };
 const emptyEvent = { id: '', name: '', organizerId: '' };
 const emptySchedule = {
   eventId: '',
@@ -17,6 +18,7 @@ function App() {
   const [registrations, setRegistrations] = useState([]);
   const [reportRows, setReportRows] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [organizerForm, setOrganizerForm] = useState(emptyOrganizer);
   const [eventForm, setEventForm] = useState(emptyEvent);
   const [participantForm, setParticipantForm] = useState(emptyParticipant);
   const [registrationForm, setRegistrationForm] = useState({ eventId: '', participantId: '' });
@@ -29,9 +31,10 @@ function App() {
     const uniqueEvents = events.length;
     const uniqueParticipants = participants.length;
     const totalRegistrations = registrations.length;
+    const totalOrganizers = organizers.length;
 
-    return { uniqueEvents, uniqueParticipants, totalRegistrations };
-  }, [events, participants, registrations]);
+    return { uniqueEvents, uniqueParticipants, totalRegistrations, totalOrganizers };
+  }, [events, organizers, participants, registrations]);
 
   const loadDashboard = async () => {
     setLoading(true);
@@ -99,6 +102,51 @@ function App() {
     window.setTimeout(() => setMessage(''), 2500);
   };
 
+  const handleAddOrganizer = async (event) => {
+    event.preventDefault();
+
+    if (!organizerForm.id || !organizerForm.name.trim()) {
+      setError('Enter organizer ID and organizer name.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/organizers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: organizerForm.id,
+          name: organizerForm.name.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to add organizer');
+
+      setOrganizerForm(emptyOrganizer);
+      showMessage(data.message || 'Organizer added successfully.');
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteOrganizer = async (id) => {
+    if (!window.confirm('Delete this organizer? If events are linked to this organizer, the database will block deletion.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/organizers/${id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to delete organizer');
+
+      showMessage(data.message || 'Organizer deleted successfully.');
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
   const handleAddEvent = async (event) => {
     event.preventDefault();
 
@@ -246,10 +294,10 @@ function App() {
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">DBMS + React Project</p>
+          <p className="eyebrow">Event Operations</p>
           <h1>Event Management System</h1>
           <p className="hero-copy">
-            Manage events, participants, schedules, and event registrations from one full-stack dashboard.
+            Manage organizers, events, schedules, participants, and registrations in one place.
           </p>
         </div>
         <button className="ghost-btn" onClick={loadDashboard}>Refresh Data</button>
@@ -259,6 +307,10 @@ function App() {
       {error && <div className="notice error" onClick={() => setError('')}>{error}</div>}
 
       <section className="stats-grid">
+        <article>
+          <span>Organizers</span>
+          <strong>{stats.totalOrganizers}</strong>
+        </article>
         <article>
           <span>Events</span>
           <strong>{stats.uniqueEvents}</strong>
@@ -305,12 +357,12 @@ function App() {
         <div className="panel">
           <div className="section-title">
             <div>
-              <p className="eyebrow">SQL Report</p>
+              <p className="eyebrow">Attendance</p>
               <h2>Most Attended Events</h2>
             </div>
           </div>
           <p className="query-note">
-            Uses JOIN + GROUP BY + COUNT to rank events by participant registrations.
+            Events ranked by participant registrations.
           </p>
           <div className="report-list">
             {reportRows.length === 0 ? (
@@ -333,12 +385,12 @@ function App() {
         <div className="panel">
           <div className="section-title">
             <div>
-              <p className="eyebrow">Trigger Demo</p>
-              <h2>Schedule Clash Check</h2>
+              <p className="eyebrow">Scheduling</p>
+              <h2>Schedule Check</h2>
             </div>
           </div>
           <p className="query-note">
-            Add a schedule for any event. If the selected time overlaps with another event on the same date, the MySQL trigger rejects it.
+            Add a schedule for any event. Overlapping events on the same date are rejected automatically.
           </p>
           <form className="schedule-form" onSubmit={handleAddSchedule}>
             <select
@@ -406,7 +458,55 @@ function App() {
       <section className="panel">
         <div className="section-title">
           <div>
-            <p className="eyebrow">Create Event</p>
+            <p className="eyebrow">Organizers</p>
+            <h2>Add New Organizer</h2>
+          </div>
+        </div>
+        <form className="form-grid" onSubmit={handleAddOrganizer}>
+          <input
+            type="number"
+            placeholder="Organizer ID"
+            value={organizerForm.id}
+            onChange={(event) => setOrganizerForm({ ...organizerForm, id: event.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Organizer Name"
+            value={organizerForm.name}
+            onChange={(event) => setOrganizerForm({ ...organizerForm, name: event.target.value })}
+          />
+          <button type="submit">Add Organizer</button>
+        </form>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Organizer</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {organizers.map((organizer) => (
+                <tr key={organizer.organizer_id}>
+                  <td>{organizer.organizer_id}</td>
+                  <td>{organizer.organizer_name}</td>
+                  <td>
+                    <button className="danger-btn" onClick={() => handleDeleteOrganizer(organizer.organizer_id)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="panel">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">Events</p>
             <h2>Add New Event</h2>
           </div>
         </div>
@@ -556,4 +656,5 @@ function formatTime(value) {
 }
 
 export default App;
+
 

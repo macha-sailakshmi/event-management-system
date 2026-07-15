@@ -78,6 +78,47 @@ app.get('/api/organizers', async (req, res) => {
     }
 });
 
+app.post('/api/organizers', async (req, res) => {
+    const { id, name } = req.body;
+
+    if (!id || !name) {
+        return res.status(400).json({ error: "Please provide organizer ID and organizer name." });
+    }
+
+    try {
+        await db.query(
+            "INSERT INTO organizers (organizer_id, organizer_name) VALUES (?, ?)",
+            [id, name.trim()]
+        );
+
+        res.status(201).json({ message: "Organizer added successfully!" });
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/organizers/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [result] = await db.query(
+            "DELETE FROM organizers WHERE organizer_id = ?",
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Organizer not found!" });
+        }
+
+        res.json({ message: "Organizer deleted successfully!" });
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({
+            error: "This organizer is linked with existing events. Delete or move those events before deleting the organizer."
+        });
+    }
+});
 app.post('/api/events', async (req, res) => {
     const { id, name, organizerId } = req.body;
 
@@ -310,4 +351,5 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     
 });
+
 
