@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
-const emptyParticipant = { id: '', name: '' };
 const emptyOrganizer = { id: '', name: '' };
 const emptyEvent = { id: '', name: '', organizerId: '' };
+const emptyParticipant = { id: '', name: '' };
 const emptySchedule = {
   eventId: '',
   eventDate: '2024-03-20',
@@ -11,7 +11,16 @@ const emptySchedule = {
   endTime: '13:00',
 };
 
+const tabs = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'events', label: 'Events' },
+  { id: 'people', label: 'People' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'reports', label: 'Reports' },
+];
+
 function App() {
+  const [activeTab, setActiveTab] = useState('overview');
   const [events, setEvents] = useState([]);
   const [organizers, setOrganizers] = useState([]);
   const [participants, setParticipants] = useState([]);
@@ -27,14 +36,12 @@ function App() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const stats = useMemo(() => {
-    const uniqueEvents = events.length;
-    const uniqueParticipants = participants.length;
-    const totalRegistrations = registrations.length;
-    const totalOrganizers = organizers.length;
-
-    return { uniqueEvents, uniqueParticipants, totalRegistrations, totalOrganizers };
-  }, [events, organizers, participants, registrations]);
+  const stats = useMemo(() => ({
+    organizers: organizers.length,
+    events: events.length,
+    participants: participants.length,
+    registrations: registrations.length,
+  }), [events, organizers, participants, registrations]);
 
   const loadDashboard = async () => {
     setLoading(true);
@@ -132,9 +139,7 @@ function App() {
   };
 
   const handleDeleteOrganizer = async (id) => {
-    if (!window.confirm('Delete this organizer? If events are linked to this organizer, the database will block deletion.')) {
-      return;
-    }
+    if (!window.confirm('Delete this organizer? Linked events can block deletion.')) return;
 
     try {
       const response = await fetch(`/api/organizers/${id}`, { method: 'DELETE' });
@@ -147,6 +152,7 @@ function App() {
       setError(err.message);
     }
   };
+
   const handleAddEvent = async (event) => {
     event.preventDefault();
 
@@ -177,39 +183,24 @@ function App() {
     }
   };
 
-  const handleAddParticipant = async (event) => {
-    event.preventDefault();
-
-    if (!participantForm.id || !participantForm.name.trim()) {
-      setError('Enter both participant ID and participant name.');
+  const handleDeleteEvent = async (id) => {
+    if (!window.confirm('Delete this event? Its schedules and registrations will also be removed.')) {
       return;
     }
 
     try {
-      const response = await fetch('/api/participants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: participantForm.id,
-          name: participantForm.name.trim(),
-        }),
-      });
+      const response = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || 'Failed to delete event');
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to add participant');
-
-      setParticipantForm(emptyParticipant);
-      showMessage(data.message || 'Participant added successfully.');
+      showMessage(data.message || 'Event deleted successfully.');
       await loadDashboard();
     } catch (err) {
       setError(err.message);
     }
   };
-
   const handleDeleteParticipant = async (id) => {
-    if (!window.confirm('Delete this participant? Related event registrations may block this if the database has linked rows.')) {
-      return;
-    }
+    if (!window.confirm('Delete this participant? Linked registrations can block deletion.')) return;
 
     try {
       const response = await fetch(`/api/participants/${id}`, { method: 'DELETE' });
@@ -306,64 +297,205 @@ function App() {
       {message && <div className="notice success">{message}</div>}
       {error && <div className="notice error" onClick={() => setError('')}>{error}</div>}
 
-      <section className="stats-grid">
-        <article>
-          <span>Organizers</span>
-          <strong>{stats.totalOrganizers}</strong>
-        </article>
-        <article>
-          <span>Events</span>
-          <strong>{stats.uniqueEvents}</strong>
-        </article>
-        <article>
-          <span>Participants</span>
-          <strong>{stats.uniqueParticipants}</strong>
-        </article>
-        <article>
-          <span>Registrations</span>
-          <strong>{stats.totalRegistrations}</strong>
-        </article>
-      </section>
+      <nav className="tabs" aria-label="Dashboard sections">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={activeTab === tab.id ? 'tab active' : 'tab'}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Events</p>
-            <h2>Scheduled Events</h2>
-          </div>
-          {loading && <span className="status-pill">Loading...</span>}
-        </div>
+      {activeTab === 'overview' && (
+        <>
+          <section className="stats-grid">
+            <article><span>Organizers</span><strong>{stats.organizers}</strong></article>
+            <article><span>Events</span><strong>{stats.events}</strong></article>
+            <article><span>Participants</span><strong>{stats.participants}</strong></article>
+            <article><span>Registrations</span><strong>{stats.registrations}</strong></article>
+          </section>
 
-        <div className="event-grid">
-          {events.map((event) => (
-            <article className="event-card" key={event.event_id}>
+          <section className="panel">
+            <div className="section-title">
               <div>
-                <span className="event-id">#{event.event_id}</span>
-                <h3>{event.event_name}</h3>
-                <p>Organizer: {event.organizer_name}</p>
+                <p className="eyebrow">Today Board</p>
+                <h2>Scheduled Events</h2>
               </div>
-              <div className="event-meta">
-                <span>{formatDate(event.event_date)}</span>
-                <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
-                <strong>{event.participant_count} registered</strong>
-                <span>{event.schedule_count} schedule row{Number(event.schedule_count) === 1 ? '' : 's'}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+              {loading && <span className="status-pill">Loading...</span>}
+            </div>
+            <EventGrid events={events} onDeleteEvent={handleDeleteEvent} />
+          </section>
+        </>
+      )}
 
-      <section className="two-column">
-        <div className="panel">
+      {activeTab === 'events' && (
+        <section className="two-column">
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Organizers</p>
+                <h2>Add Organizer</h2>
+              </div>
+            </div>
+            <form className="form-grid compact-form" onSubmit={handleAddOrganizer}>
+              <input type="number" placeholder="Organizer ID" value={organizerForm.id} onChange={(event) => setOrganizerForm({ ...organizerForm, id: event.target.value })} />
+              <input type="text" placeholder="Organizer Name" value={organizerForm.name} onChange={(event) => setOrganizerForm({ ...organizerForm, name: event.target.value })} />
+              <button type="submit">Add</button>
+            </form>
+            <DataTable
+              headers={['ID', 'Organizer', 'Action']}
+              rows={organizers.map((organizer) => [
+                organizer.organizer_id,
+                organizer.organizer_name,
+                <button className="danger-btn" onClick={() => handleDeleteOrganizer(organizer.organizer_id)}>Delete</button>,
+              ])}
+            />
+          </div>
+
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Events</p>
+                <h2>Add Event</h2>
+              </div>
+            </div>
+            <form className="form-grid" onSubmit={handleAddEvent}>
+              <input type="number" placeholder="Event ID" value={eventForm.id} onChange={(event) => setEventForm({ ...eventForm, id: event.target.value })} />
+              <input type="text" placeholder="Event Name" value={eventForm.name} onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })} />
+              <select value={eventForm.organizerId} onChange={(event) => setEventForm({ ...eventForm, organizerId: event.target.value })}>
+                <option value="">Select Organizer</option>
+                {organizers.map((organizer) => (
+                  <option key={organizer.organizer_id} value={organizer.organizer_id}>{organizer.organizer_name}</option>
+                ))}
+              </select>
+              <button type="submit">Add Event</button>
+            </form>
+            <EventGrid events={events} onDeleteEvent={handleDeleteEvent} />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'people' && (
+        <section className="two-column">
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Participants</p>
+                <h2>Add Participant</h2>
+              </div>
+            </div>
+            <form className="form-grid compact-form" onSubmit={handleAddParticipant}>
+              <input type="number" placeholder="Participant ID" value={participantForm.id} onChange={(event) => setParticipantForm({ ...participantForm, id: event.target.value })} />
+              <input type="text" placeholder="Participant Name" value={participantForm.name} onChange={(event) => setParticipantForm({ ...participantForm, name: event.target.value })} />
+              <button type="submit">Add</button>
+            </form>
+            <DataTable
+              headers={['ID', 'Name', 'Action']}
+              rows={participants.map((participant) => [
+                participant.participant_id,
+                participant.participant_name,
+                <button className="danger-btn" onClick={() => handleDeleteParticipant(participant.participant_id)}>Delete</button>,
+              ])}
+            />
+          </div>
+
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Registrations</p>
+                <h2>Register for Event</h2>
+              </div>
+            </div>
+            <form className="form-grid compact-form" onSubmit={handleRegister}>
+              <select value={registrationForm.eventId} onChange={(event) => setRegistrationForm({ ...registrationForm, eventId: event.target.value })}>
+                <option value="">Select Event</option>
+                {events.map((event) => (
+                  <option key={event.event_id} value={event.event_id}>{event.event_name}</option>
+                ))}
+              </select>
+              <select value={registrationForm.participantId} onChange={(event) => setRegistrationForm({ ...registrationForm, participantId: event.target.value })}>
+                <option value="">Select Participant</option>
+                {participants.map((participant) => (
+                  <option key={participant.participant_id} value={participant.participant_id}>{participant.participant_name}</option>
+                ))}
+              </select>
+              <button type="submit">Register</button>
+            </form>
+            <div className="registration-list">
+              {registrations.map((registration) => (
+                <article className="registration-card" key={`${registration.event_id}-${registration.participant_id}`}>
+                  <div>
+                    <strong>{registration.participant_name}</strong>
+                    <span>{registration.event_name}</span>
+                  </div>
+                  <button className="danger-btn subtle" onClick={() => handleRemoveRegistration(registration.event_id, registration.participant_id)}>Remove</button>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'schedule' && (
+        <section className="two-column">
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Scheduling</p>
+                <h2>Add Schedule</h2>
+              </div>
+            </div>
+            <p className="query-note">
+              Overlapping events on the same date are rejected automatically.
+            </p>
+            <form className="schedule-form" onSubmit={handleAddSchedule}>
+              <select value={scheduleForm.eventId} onChange={(event) => setScheduleForm({ ...scheduleForm, eventId: event.target.value })}>
+                <option value="">Select Event</option>
+                {events.map((event) => (
+                  <option key={event.event_id} value={event.event_id}>{event.event_name}</option>
+                ))}
+              </select>
+              <input type="date" value={scheduleForm.eventDate} onChange={(event) => setScheduleForm({ ...scheduleForm, eventDate: event.target.value })} />
+              <input type="time" value={scheduleForm.startTime} onChange={(event) => setScheduleForm({ ...scheduleForm, startTime: event.target.value })} />
+              <input type="time" value={scheduleForm.endTime} onChange={(event) => setScheduleForm({ ...scheduleForm, endTime: event.target.value })} />
+              <button type="submit">Add Schedule</button>
+            </form>
+          </div>
+
+          <div className="panel">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Calendar</p>
+                <h2>Schedule Rows</h2>
+              </div>
+            </div>
+            <DataTable
+              headers={['ID', 'Event', 'Date', 'Start', 'End']}
+              rows={schedules.map((schedule) => [
+                schedule.schedule_id,
+                schedule.event_name,
+                formatDate(schedule.event_date),
+                formatTime(schedule.start_time),
+                formatTime(schedule.end_time),
+              ])}
+            />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'reports' && (
+        <section className="panel">
           <div className="section-title">
             <div>
               <p className="eyebrow">Attendance</p>
               <h2>Most Attended Events</h2>
             </div>
           </div>
-          <p className="query-note">
-            Events ranked by participant registrations.
-          </p>
+          <p className="query-note">Events ranked by participant registrations.</p>
           <div className="report-list">
             {reportRows.length === 0 ? (
               <p className="muted">No report rows found. Register participants for events to generate this report.</p>
@@ -380,264 +512,70 @@ function App() {
               ))
             )}
           </div>
-        </div>
-
-        <div className="panel">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">Scheduling</p>
-              <h2>Schedule Check</h2>
-            </div>
-          </div>
-          <p className="query-note">
-            Add a schedule for any event. Overlapping events on the same date are rejected automatically.
-          </p>
-          <form className="schedule-form" onSubmit={handleAddSchedule}>
-            <select
-              value={scheduleForm.eventId}
-              onChange={(event) => setScheduleForm({ ...scheduleForm, eventId: event.target.value })}
-            >
-              <option value="">Select Event</option>
-              {events.map((event) => (
-                <option key={event.event_id} value={event.event_id}>{event.event_name}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={scheduleForm.eventDate}
-              onChange={(event) => setScheduleForm({ ...scheduleForm, eventDate: event.target.value })}
-            />
-            <input
-              type="time"
-              value={scheduleForm.startTime}
-              onChange={(event) => setScheduleForm({ ...scheduleForm, startTime: event.target.value })}
-            />
-            <input
-              type="time"
-              value={scheduleForm.endTime}
-              onChange={(event) => setScheduleForm({ ...scheduleForm, endTime: event.target.value })}
-            />
-            <button type="submit">Add Schedule</button>
-          </form>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Schedule Table</p>
-            <h2>Current Schedule Rows</h2>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Schedule ID</th>
-                <th>Event</th>
-                <th>Date</th>
-                <th>Start</th>
-                <th>End</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schedules.map((schedule) => (
-                <tr key={schedule.schedule_id}>
-                  <td>{schedule.schedule_id}</td>
-                  <td>{schedule.event_name}</td>
-                  <td>{formatDate(schedule.event_date)}</td>
-                  <td>{formatTime(schedule.start_time)}</td>
-                  <td>{formatTime(schedule.end_time)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Organizers</p>
-            <h2>Add New Organizer</h2>
-          </div>
-        </div>
-        <form className="form-grid" onSubmit={handleAddOrganizer}>
-          <input
-            type="number"
-            placeholder="Organizer ID"
-            value={organizerForm.id}
-            onChange={(event) => setOrganizerForm({ ...organizerForm, id: event.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Organizer Name"
-            value={organizerForm.name}
-            onChange={(event) => setOrganizerForm({ ...organizerForm, name: event.target.value })}
-          />
-          <button type="submit">Add Organizer</button>
-        </form>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Organizer</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {organizers.map((organizer) => (
-                <tr key={organizer.organizer_id}>
-                  <td>{organizer.organizer_id}</td>
-                  <td>{organizer.organizer_name}</td>
-                  <td>
-                    <button className="danger-btn" onClick={() => handleDeleteOrganizer(organizer.organizer_id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Events</p>
-            <h2>Add New Event</h2>
-          </div>
-        </div>
-        <form className="form-grid" onSubmit={handleAddEvent}>
-          <input
-            type="number"
-            placeholder="Event ID"
-            value={eventForm.id}
-            onChange={(event) => setEventForm({ ...eventForm, id: event.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Event Name"
-            value={eventForm.name}
-            onChange={(event) => setEventForm({ ...eventForm, name: event.target.value })}
-          />
-          <select
-            value={eventForm.organizerId}
-            onChange={(event) => setEventForm({ ...eventForm, organizerId: event.target.value })}
-          >
-            <option value="">Select Organizer</option>
-            {organizers.map((organizer) => (
-              <option key={organizer.organizer_id} value={organizer.organizer_id}>
-                {organizer.organizer_name}
-              </option>
-            ))}
-          </select>
-          <button type="submit">Add Event</button>
-        </form>
-      </section>
-
-      <section className="two-column">
-        <div className="panel">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">Participants</p>
-              <h2>Add Participant</h2>
-            </div>
-          </div>
-          <form className="form-grid" onSubmit={handleAddParticipant}>
-            <input
-              type="number"
-              placeholder="Participant ID"
-              value={participantForm.id}
-              onChange={(event) => setParticipantForm({ ...participantForm, id: event.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Participant Name"
-              value={participantForm.name}
-              onChange={(event) => setParticipantForm({ ...participantForm, name: event.target.value })}
-            />
-            <button type="submit">Add Participant</button>
-          </form>
-
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {participants.map((participant) => (
-                  <tr key={participant.participant_id}>
-                    <td>{participant.participant_id}</td>
-                    <td>{participant.participant_name}</td>
-                    <td>
-                      <button className="danger-btn" onClick={() => handleDeleteParticipant(participant.participant_id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">Registrations</p>
-              <h2>Register for Event</h2>
-            </div>
-          </div>
-          <form className="form-grid" onSubmit={handleRegister}>
-            <select
-              value={registrationForm.eventId}
-              onChange={(event) => setRegistrationForm({ ...registrationForm, eventId: event.target.value })}
-            >
-              <option value="">Select Event</option>
-              {events.map((event) => (
-                <option key={event.event_id} value={event.event_id}>{event.event_name}</option>
-              ))}
-            </select>
-            <select
-              value={registrationForm.participantId}
-              onChange={(event) => setRegistrationForm({ ...registrationForm, participantId: event.target.value })}
-            >
-              <option value="">Select Participant</option>
-              {participants.map((participant) => (
-                <option key={participant.participant_id} value={participant.participant_id}>
-                  {participant.participant_name}
-                </option>
-              ))}
-            </select>
-            <button type="submit">Register Participant</button>
-          </form>
-
-          <div className="registration-list">
-            {registrations.map((registration) => (
-              <article className="registration-card" key={`${registration.event_id}-${registration.participant_id}`}>
-                <div>
-                  <strong>{registration.participant_name}</strong>
-                  <span>{registration.event_name}</span>
-                </div>
-                <button
-                  className="danger-btn subtle"
-                  onClick={() => handleRemoveRegistration(registration.event_id, registration.participant_id)}
-                >
-                  Remove
-                </button>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
+  );
+}
+
+async function readApiResponse(response) {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    error: text.startsWith('<!DOCTYPE')
+      ? 'Backend route was not found. Restart node server.js and try again.'
+      : text || 'Unexpected server response.',
+  };
+}
+function EventGrid({ events, onDeleteEvent }) {
+  return (
+    <div className="event-grid">
+      {events.map((event) => (
+        <article className="event-card" key={event.event_id}>
+          <div>
+            <span className="event-id">#{event.event_id}</span>
+            <h3>{event.event_name}</h3>
+            <p>Organizer: {event.organizer_name}</p>
+          </div>
+          <div className="event-meta">
+            <span>{formatDate(event.event_date)}</span>
+            <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
+            <strong>{event.participant_count} registered</strong>
+            <span>{event.schedule_count} schedule row{Number(event.schedule_count) === 1 ? '' : 's'}</span>
+          </div>
+            {onDeleteEvent && (
+              <button className="danger-btn subtle event-delete" onClick={() => onDeleteEvent(event.event_id)}>
+                Delete Event
+              </button>
+            )}        </article>
+      ))}
+    </div>
+  );
+}
+
+function DataTable({ headers, rows }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {headers.map((header) => <th key={header}>{header}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`}>{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

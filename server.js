@@ -211,6 +211,28 @@ app.get('/api/schedules', async (req, res) => {
     }
 });
 
+app.delete('/api/events/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        await db.query("DELETE FROM schedule WHERE event_id = ?", [id]);
+        await db.query("DELETE FROM event_participation WHERE event_id = ?", [id]);
+
+        const [result] = await db.query(
+            "DELETE FROM events WHERE event_id = ?",
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Event not found!" });
+        }
+
+        res.json({ message: "Event deleted successfully!" });
+    } catch (err) {
+        console.error("DEBUG ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
 app.post('/api/schedules', async (req, res) => {
     const { eventId, eventDate, startTime, endTime } = req.body;
 
@@ -351,5 +373,7 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     
 });
+
+
 
 
